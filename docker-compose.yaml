@@ -1,0 +1,61 @@
+version: '3.1'
+
+services:
+  mysqldb:
+    image: mysql:latest
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: 12345
+      MYSQL_DATABASE: mydb
+      MYSQL_USER: user
+      MYSQL_PASSWORD: user
+    healthcheck:
+      test: mysqladmin ping -h 127.0.0.1 -u $$MYSQL_USER --password=$$MYSQL_PASSWORD
+      start_period: 5s
+      interval: 5s
+      timeout: 5s
+      retries: 25
+    volumes:
+      - ./data:/var/lib/mysql/
+    networks:
+      - local-net
+
+  redis:
+    image: redis:alpine
+    restart: always
+    ports:
+      - "6379:6379"
+    depends_on:
+      - mysqldb
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "$REDIS_PASSWORD", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    networks:
+      - local-net
+
+  application:
+    links:
+        - mysqldb
+        - redis
+    build:
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      - MYSQL_HOST=mysqldb
+      - MYREDIS_HOST=redis
+    depends_on:
+      mysqldb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - local-net
+
+networks:
+  local-net:
+    driver: bridge
